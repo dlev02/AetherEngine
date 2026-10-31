@@ -1098,6 +1098,7 @@ public final class AetherEngine: ObservableObject {
     struct PendingPreReadySeek: Equatable {
         var seconds: Double
         var origin: SeekOrigin
+        var exact = false
     }
     var pendingPreReadySeek: PendingPreReadySeek?
     /// AE#446 round 4: what separates the CURRENT item's own timeline from the session's, in seconds.
@@ -1476,7 +1477,7 @@ public final class AetherEngine: ObservableObject {
         case .replay:
             pendingPreReadySeek = nil
             EngineLog.emit("[AetherEngine] replaying seek stashed during load to \(String(format: "%.2f", pending.seconds))s (#178)", category: .engine)
-            Task { @MainActor in await self.seek(to: pending.seconds, origin: pending.origin) }
+            Task { @MainActor in await self.seek(to: pending.seconds, origin: pending.origin, exact: pending.exact) }
         }
     }
 
@@ -6228,20 +6229,28 @@ public final class AetherEngine: ObservableObject {
     }
 
     public func seek(to seconds: Double) async {
+        await seek(to: seconds, exact: false)
+    }
+
+    /// `exact: true` lands on `seconds` even where the route would otherwise land on a nearby
+    /// keyframe (the software host's AV1 through dav1d, `SWKeyframeSnap`): a chapter mark or the end of
+    /// an intro, where a landing a few seconds early or late is wrong. It costs that route the decode
+    /// from the keyframe before the target up to it. Every other route is exact either way.
+    public func seek(to seconds: Double, exact: Bool) async {
         // Audit DMX-113: the `.loading` branch below would otherwise publish a NaN or infinite
         // position into the clock, and the hosts' seeks hand it to the Demuxer as ticks.
         guard seconds.isFinite else {
             EngineLog.emit("[AetherEngine] seek(to:\(seconds)) ignored: not a finite position", category: .engine)
             return
         }
-        await seek(to: seconds, origin: .host)
+        await seek(to: seconds, origin: .host, exact: exact)
     }
 
     /// AE#446 round 4: the same seek, with who asked for it. `.liveRejoin` is the engine coming back
     /// to a position it decided itself out of content the session served; it is not a scrub, so the
     /// live-only refusal below does not apply to it and its landing is measured against what the item
     /// holds rather than against what the session advertises.
-    func seek(to seconds: Double, origin: SeekOrigin) async {
+    func seek(to seconds: Double, origin: SeekOrigin, exact: Bool = false) async {
         // Guard: a host scrub racing stop() must not flip an idle/error engine to .seeking -> .playing.
         // .ended is terminal too: after end-of-media the host reloads to replay, it does not scrub a parked session.
         switch state {
@@ -6255,7 +6264,7 @@ public final class AetherEngine: ObservableObject {
             // in the #127 slot and resolve it on the transition out of .loading (state didSet):
             // replay into a playable state, discard into a terminal one. Clamp/live guards re-run
             // at replay when the session is actually known; duration may still be unprobed here.
-            pendingPreReadySeek = PendingPreReadySeek(seconds: seconds, origin: origin)
+            pendingPreReadySeek = PendingPreReadySeek(seconds: seconds, origin: origin, exact: exact)
             clock.currentTime = duration > 0 ? max(0, min(seconds, duration)) : max(0, seconds)
             EngineLog.emit("[AetherEngine] seek(to:\(String(format: "%.2f", seconds))) stashed during load; will replay when the session settles (#178)", category: .engine)
             beginDeferredSeek(target: clock.currentTime)
@@ -6302,7 +6311,7 @@ public final class AetherEngine: ObservableObject {
             isLive: isLive,
             nativeHostReady: nativeHost?.isReady ?? true
         ) {
-            pendingPreReadySeek = PendingPreReadySeek(seconds: seconds, origin: origin)
+            pendingPreReadySeek = PendingPreReadySeek(seconds: seconds, origin: origin, exact: exact)
             clock.currentTime = max(0, min(seconds, duration))
             EngineLog.emit("[AetherEngine] seek(to:\(String(format: "%.2f", seconds))) deferred until item ready (#127)", category: .engine)
             beginDeferredSeek(target: clock.currentTime)
@@ -6508,6 +6517,12 @@ public final class AetherEngine: ObservableObject {
         // A reposition that spends its budget leaves the read position undefined and nothing re-issues
         // it, unlike the native recovery path whose ticket stays open for a late landing, so that case
         // closes this ticket terminally as `.stalled` instead of claiming a landing it cannot back up.
+        // PR #943: AV1 through dav1d lands on a keyframe unless the host asked for the exact position.
+        // Decided here, so the harvest anchor below and the finalize describe where the pump restarts.
+        if !exact, let host = softwareHost, let landing = host.keyframeLanding(forSession: clockTarget) {
+            target += landing - clockTarget
+            clockTarget = landing
+        }
         var hostReposition: Demuxer.RepositionOutcome = .landed
         if audioAVPlayerActive, let host = audioAVPlayerHost {
             await host.seek(to: clockTarget)

@@ -72,6 +72,24 @@ struct KeyframeSnappedSeekTests {
         #expect(snap(25, from: 5, keyframes: keys) == 26.8)
     }
 
+    @Test("A short skip never moves by less than half its distance: the reach shrinks with the seek")
+    func reachShrinksWithTheSeek() {
+        // +10 s from 6.6 s: 6.7 s is within 10 s of the target, but would turn the skip into 0.1 s.
+        #expect(snap(16.6, from: 6.6, keyframes: [0, 6.7, 30]) == nil)
+        #expect(snap(16.6, from: 6.6, keyframes: [0, 6.7, 13.4, 20.1]) == 13.4)
+    }
+
+    /// The cache converts ticks as `pts * num / den`, the index as `pts * (num / den)`; at 1/24000 the
+    /// index value sits one bit below the cache's for about one keyframe in five.
+    @Test("A keyframe both lists hold keeps the cache's value, which a cache hit compares exactly")
+    func sharedKeyframeKeepsTheCacheValue() {
+        let cached = Double(300_003) * 1 / 24000
+        let indexed = Double(300_003) * (1.0 / 24000)
+        #expect(indexed < cached)
+        #expect(SWKeyframeSnap.candidates(retained: [cached], indexed: [0, indexed]) == [0, cached])
+        #expect(SWKeyframeSnap.candidates(retained: [], indexed: [0, indexed]) == [0, indexed])
+    }
+
     private final class Input: @unchecked Sendable {
         private let lock = NSLock()
         private var packets: [SoftwareStoredPacket]

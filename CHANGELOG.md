@@ -38,6 +38,15 @@ the public-API contract.
   not enough on Matroska, whose Cues are read only when the demuxer repositions, which a seek the cache serves never does.
   It is read off the main actor, at open and after every landing, since its lock is held across a slow remote read (#254).
   `AetherEngine.snapsAV1SeeksToKeyframes` (`@_spi(Diagnostics)`) switches both off for comparisons.
+  Contributed by chrws (PR #943).
+- **`seek(to:exact:)`** lands exactly on that route too, for a chapter mark or the end of an intro, where a landing
+  seconds early replays the intro's tail and one seconds late skips the episode's first line. `seek(to:)` keeps the
+  keyframe landing. The engine now decides the landing before it notes the subtitle harvest anchor and publishes the
+  clock, so both name the keyframe the pump restarts from instead of the requested position. A snap moves a seek by at
+  most half its own distance, so +10 s from just before a keyframe with the next one far off no longer lands 0.1 s
+  ahead, and a keyframe both the packet cache and the index list keeps the cache's value: the index converts ticks in
+  another order and sat one bit lower for about one keyframe in five at a 1/24000 time base, which made the cache hit
+  restore to the keyframe before it.
 
 ## [7.53.1] - 2026-10-31
 

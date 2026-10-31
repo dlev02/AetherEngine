@@ -21,9 +21,11 @@ enum SWKeyframeSnap {
     static let reachSeconds: Double = 10
 
     /// The keyframe nearest `target` (source seconds) among `keyframes` (sorted ascending), or nil to
-    /// keep the seek exact: no keyframe at or after the target, no keyframe within `reach`, or
-    /// the nearest one on the other side of `current`, since a forward seek never lands behind the
-    /// playhead and a backward one never ahead of it.
+    /// keep the seek exact: no keyframe at or after the target, no keyframe within `reach` or within
+    /// half the seek's own distance, or the nearest one on the other side of `current`, since a
+    /// forward seek never lands behind the playhead and a backward one never ahead of it. The half
+    /// distance keeps a short skip a skip: with keyframes at 6.7 s and 30 s, +10 s from 6.6 s would
+    /// otherwise land on 6.7 s.
     ///
     /// The first condition is for keyframes that have not reached the target yet: Matroska reads its
     /// Cues only when the demuxer repositions, so until then the index holds only the keyframes read
@@ -32,6 +34,7 @@ enum SWKeyframeSnap {
     static func snappedSeconds(target: Double, current: Double, keyframes: [Double],
                                reach: Double = reachSeconds) -> Double? {
         guard target.isFinite, current.isFinite, !keyframes.isEmpty else { return nil }
+        let reach = min(reach, abs(target - current) / 2)
         var lo = 0, hi = keyframes.count
         while lo < hi {
             let mid = (lo + hi) / 2
@@ -48,21 +51,29 @@ enum SWKeyframeSnap {
     /// The keyframes a seek can snap to: the packet cache's retained ones, current as the read-ahead
     /// moves (a seek it serves never repositions the demuxer, so Matroska's Cues stay unread), and the
     /// index as last read, which past the cache covers what Cues or an `stss` hold. Ascending, with
-    /// one entry per keyframe the two lists share.
+    /// one entry per keyframe the two lists share, and that entry the cache's own value: the two
+    /// convert ticks to seconds in a different order and can differ in the last bit (an MP4 at 1/24000
+    /// does for about one keyframe in five), and a cache hit compares its keyframes against the target
+    /// exactly, so an index value a bit below the cache's would restore to the keyframe before it.
     static func candidates(retained: [Double], indexed: [Double]) -> [Double] {
-        var merged: [Double] = []
+        var merged: [(seconds: Double, retained: Bool)] = []
         merged.reserveCapacity(retained.count + indexed.count)
-        for seconds in (retained + indexed).sorted() where seconds.isFinite {
-            if let last = merged.last, seconds - last < 0.001 { continue }
-            merged.append(seconds)
+        let tagged = retained.map { (seconds: $0, retained: true) } + indexed.map { (seconds: $0, retained: false) }
+        for entry in tagged.sorted(by: { $0.seconds < $1.seconds }) where entry.seconds.isFinite {
+            if let last = merged.last, entry.seconds - last.seconds < 0.001 {
+                if entry.retained, !last.retained { merged[merged.count - 1] = entry }
+                continue
+            }
+            merged.append(entry)
         }
-        return merged
+        return merged.map(\.seconds)
     }
 }
 
 extension AetherEngine {
     /// True (the default) lands a seek on the software host's AV1 through dav1d on the keyframe
-    /// nearest its target; false keeps every seek exact, for comparisons. Read when a
+    /// nearest its target unless the host asked for `seek(to:exact: true)`; false keeps every seek
+    /// exact, for comparisons. Read when a
     /// session opens its decoder, so it takes effect on the next load or reload.
     @_spi(Diagnostics)
     public nonisolated static var snapsAV1SeeksToKeyframes: Bool {

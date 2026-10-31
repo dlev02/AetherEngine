@@ -2337,6 +2337,21 @@ final class SoftwarePlaybackHost {
         }
     }
 
+    /// Where a seek to `seconds` (session axis) lands for `SWKeyframeSnap`, nil to keep it exact. Asked
+    /// by the engine before it notes the subtitle harvest anchor and publishes the landing, so both
+    /// describe the keyframe the pump restarts from rather than the requested position.
+    func keyframeLanding(forSession seconds: Double) -> Double? {
+        guard snapsSeeksToKeyframes, !isLive else { return nil }
+        let sourceSeconds = SWClockAnchorPolicy.sourceSeconds(forSession: seconds, sessionZeroSeconds: clockSessionZero)
+        guard let snapped = SWKeyframeSnap.snappedSeconds(
+            target: sourceSeconds, current: sourceClockSeconds,
+            keyframes: SWKeyframeSnap.candidates(retained: vodPacketReadAhead?.retainedKeyframeSeconds ?? [],
+                                                 indexed: snapKeyframeSeconds)) else { return nil }
+        EngineLog.emit("[SWHost] seek snapped to keyframe target_s=\(String(format: "%.3f", sourceSeconds)) "
+                       + "keyframe_s=\(String(format: "%.3f", snapped))", category: .swPlayback)
+        return seconds + snapped - sourceSeconds
+    }
+
     /// #254: the demuxer reposition is awaited off the main actor. It used to run inline here, and
     /// because `Demuxer.readPacket` holds the access lock across the whole `av_read_frame`, a seek
     /// issued while the demux loop sat in a slow remote read parked the main thread for the length of
@@ -2361,21 +2376,10 @@ final class SoftwarePlaybackHost {
         // already makes with `sessionStartPts`. For a zero-based source the two
         // axes coincide and this is the identity, which is why the omission only
         // ever showed on a mid-stream-joined one.
-        var sourceSeconds = SWClockAnchorPolicy.sourceSeconds(
+        let sourceSeconds = SWClockAnchorPolicy.sourceSeconds(
             forSession: seconds,
             sessionZeroSeconds: clockSessionZero
         )
-        var seconds = seconds
-        if snapsSeeksToKeyframes, !isLive,
-           let snapped = SWKeyframeSnap.snappedSeconds(
-               target: sourceSeconds, current: sourceClockSeconds,
-               keyframes: SWKeyframeSnap.candidates(retained: packetSource?.retainedKeyframeSeconds ?? [],
-                                                    indexed: snapKeyframeSeconds)) {
-            EngineLog.emit("[SWHost] seek snapped to keyframe target_s=\(String(format: "%.3f", sourceSeconds)) "
-                           + "keyframe_s=\(String(format: "%.3f", snapped))", category: .swPlayback)
-            seconds += snapped - sourceSeconds
-            sourceSeconds = snapped
-        }
         let cacheGeneration = packetSource?.beginSeek(to: sourceSeconds)
         // #292: inside another seek's window `isPlaying` is that seek's parked flag, not the transport's
         // intent. Inherit what it captured, and hand the same value on to whoever supersedes this one.
