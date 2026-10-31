@@ -1022,7 +1022,7 @@ extension AetherEngine {
         // claim. Stated even when the positioning fell back or failed: what the loop then reads is
         // still forwards from wherever it sits, and the anchor is the earliest it can be.
         store.noteHarvestAnchor(.prefetch, at: startAt)
-        if landed != .seek {
+        if landed != .seek, !Task.isCancelled {  // AE#944: a cancelled session's positioning is noise
             EngineLog.emit(
                 "[AetherEngine] #151 forward prefetch seek to \(String(format: "%.2f", startAt))s timed out "
                 + "or failed; byte-estimate fallback \(landed == .byteEstimate ? "applied" : "unavailable")",
