@@ -24,6 +24,11 @@ extension SubtitleForwardPrefetcher {
 }
 
 extension AetherEngine {
+    /// AE#937: the readers open a second demuxer with its own pump, which a one-request origin does
+    /// not allow. A custom source's clone reads through the host's reader, not the origin budget.
+    nonisolated static func nativeSubtitleReadersAllowed(isCustomSource: Bool, originSerial: Bool) -> Bool {
+        isCustomSource || !originSerial
+    }
 
     // MARK: - Channel routing
 
@@ -1894,6 +1899,13 @@ extension AetherEngine {
     func startNativeSubtitleReaders(url: URL, stores: [NativeSubtitleCueStore],
                                     readToEOF: Bool = false, startAtSeconds: Double? = nil) {
         cancelNativeSubtitleReaders()
+        guard Self.nativeSubtitleReadersAllowed(
+            isCustomSource: isCustomSource,
+            originSerial: OriginRequestBudget.shared.requiresSerialRequests(url)) else {
+            EngineLog.emit("[AetherEngine] AE#937 native subtitle readers skipped: one-request origin, "
+                           + "the pump tap covers the produced region", category: .engine)
+            return
+        }
         nativeSubtitleReadersRunToEOF = readToEOF
         var pairs: [(streamIndex: Int32, store: NativeSubtitleCueStore)] = []
         for (ordinal, entry) in nativeSubtitleTrackTable.enumerated() {

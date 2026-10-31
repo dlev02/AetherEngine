@@ -10,7 +10,16 @@ the public-API contract.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **A one-request origin no longer sees a second reader (#937).** With `maxConcurrentSourceRequests = 1` (or a
+  learned limit of one), the keyframe still ladder (7.51.0) still opened its side reader, because its eligibility
+  passed `originIsSerial: false`; a rung read overcommitted once the pump queued behind it. It now uses the same
+  serial-origin check as the I-frame rendition and the compositor preview, and re-checks it before every rung, so a
+  limit learned mid-session stops it too. The native subtitle readers (PiP / AirPlay with a text subtitle, eager
+  readers) stay off such an origin as well; the pump tap still fills the produced region. A restart that replaces
+  a demuxer wedged in a read aborts that read before the fresh open there, instead of letting the new demuxer wait
+  out the held slot and overcommit. Scrub stills beyond the buffer are therefore unavailable on a one-request origin.
 
 ## [7.53.1] - 2026-10-31
 
