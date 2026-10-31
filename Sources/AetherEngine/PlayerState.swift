@@ -380,14 +380,16 @@ public enum LiveJoinProfile: Sendable, Equatable {
 }
 
 /// Options for `AetherEngine.load(url:options:)`. All flags default to safe values.
-/// Which playback host serves a session's video (#461). See `LoadOptions.preferredDecodePath`.
+/// Which playback host serves a session's video (#461), or an audio-only session's audio. See
+/// `LoadOptions.preferredDecodePath`.
 public enum DecodePath: String, Sendable, Equatable, CaseIterable {
     /// The engine routes: codec support, the VideoToolbox capability probe, declared interlace,
     /// source seekability. The default, and right for every session that does not have evidence
     /// the engine cannot have.
     case automatic
-    /// Serve this source through `SoftwarePlaybackHost`, whatever the routing concluded. Scoped to
-    /// the session; it does not touch any other session on the shared engine.
+    /// Serve this source through `SoftwarePlaybackHost` (`AudioPlaybackHost` on an `audioOnly`
+    /// session), whatever the routing concluded. Scoped to the session; it does not touch any other
+    /// session on the shared engine.
     case software
 }
 
