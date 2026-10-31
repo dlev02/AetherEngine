@@ -374,8 +374,9 @@ public enum LiveJoinProfile: Sendable, Equatable {
     /// Channel-zapping profile: cut live segments at every keyframe past 0.5s, so TARGETDURATION and
     /// holdback collapse to the source keyframe cadence. The first playlist prefers the full holdback,
     /// but after two finalized segments a strict-realtime source gets one observed-segment grace,
-    /// clamped to 0.5...2.0s, before a shallow first window is served. That bounded start can produce
-    /// one early -16832 warning or a short rebuffer.
+    /// clamped to 0.5...2.0s, before a shallow first window is served. The grace ends early once the
+    /// source reads at 1x and the open segment cannot reach its keyframe within it (AE#936). That
+    /// bounded start can produce one early -16832 warning or a short rebuffer.
     case fastZap
 }
 

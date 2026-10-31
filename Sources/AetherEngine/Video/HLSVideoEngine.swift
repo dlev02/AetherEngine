@@ -3839,6 +3839,9 @@ public final class HLSVideoEngine: @unchecked Sendable {
             prod.onLiveSegmentSound = { [weak prov] index, first, last in
                 prov?.noteLiveSegmentSound(index: index, firstSeconds: first, lastSeconds: last)
             }
+            prod.onLiveReadHead = { [weak prov] ptsSeconds in
+                prov?.noteLiveReadHead(ptsSeconds: ptsSeconds)
+            }
             // AE#443: the runaway park has to sit above the window this session actually serves, or it
             // bounds the window instead of backstopping it, and its enforcement (a sleeping read
             // thread) stops the origin from being drained.
