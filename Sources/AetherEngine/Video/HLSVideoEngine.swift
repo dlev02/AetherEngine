@@ -1703,7 +1703,7 @@ public final class HLSVideoEngine: @unchecked Sendable {
         // negotiation state didn't match (Vincent test 2026-05-26, HDR10 panel).
         let hdcpLevel: String? = nil
 
-        // 5. Normalize the HEVC config record shipped in init.mp4:
+        // 5. Normalize the HEVC / H.264 config record shipped in init.mp4 (H.264 only takes a), #938):
         //    a) numOfArrays=0 (DV P5 MP4 encoders shipping VPS/SPS/PPS per-IRAP, #19 Wandering Earth 2):
         //       rebuild the hvcC from in-band parameter sets, else the dvh1 sample entry fails CME -4.
         //    b) numOfArrays>0 but carrying non-parameter-set arrays (libx265's user-data SEI_PREFIX, AE#187):
@@ -1731,19 +1731,31 @@ public final class HLSVideoEngine: @unchecked Sendable {
             containerStereo: StereoVideoSignal.containerStereo(codecpar),
             systemPresentsStereo: stereoOnAnySystem || StereoVideoSignal.systemPresentsStereo
         )
-        let hevcExtradataOverride: [UInt8]?
+        let videoExtradataOverride: [UInt8]?
         if let normalized = framingNormalization.extradataOverride {
-            hevcExtradataOverride = normalized
+            videoExtradataOverride = normalized
         } else if let rebuilt = rebuildHEVCExtradataWithInBandParameterSets(
             demuxer: dem,
             videoStreamIndex: videoIndex,
             codecpar: codecpar,
             rewindBeforeScan: !isLiveSession
         ) {
-            hevcExtradataOverride = rebuilt
+            videoExtradataOverride = rebuilt
             EngineLog.emit(
                 "[HLSVideoEngine] rebuilt hvcC with in-band parameter sets: "
                 + "\(codecpar.pointee.extradata_size) B → \(rebuilt.count) B",
+                category: .session
+            )
+        } else if let rebuilt = rebuildH264ExtradataWithInBandParameterSets(
+            demuxer: dem,
+            videoStreamIndex: videoIndex,
+            codecpar: codecpar,
+            rewindBeforeScan: !isLiveSession
+        ) {
+            videoExtradataOverride = rebuilt
+            EngineLog.emit(
+                "[HLSVideoEngine] rebuilt avcC with in-band parameter sets: "
+                + "\(codecpar.pointee.extradata_size) B → \(rebuilt.count) B (#938)",
                 category: .session
             )
         } else if codecpar.pointee.codec_id == AV_CODEC_ID_HEVC,
@@ -1752,14 +1764,14 @@ public final class HLSVideoEngine: @unchecked Sendable {
                   let canonical = Self.canonicalizeHEVCConfigRecord(
                       source, keepingSEIPayloadTypes: stereo.signal == .multiview
                           ? [Self.stereoReferenceDisplaysSEIPayloadType] : []) {
-            hevcExtradataOverride = canonical
+            videoExtradataOverride = canonical
             EngineLog.emit(
                 "[HLSVideoEngine] canonicalized hvcC (stripped non-parameter-set NAL arrays): "
                 + "\(source.count) B → \(canonical.count) B (AE#187)",
                 category: .session
             )
         } else {
-            hevcExtradataOverride = nil
+            videoExtradataOverride = nil
         }
 
         // 6. Reset demuxer cursor to 0 (cue prewarm moved it mid-file). Skipped for live
@@ -1925,7 +1937,7 @@ public final class HLSVideoEngine: @unchecked Sendable {
             doviConfig: doviConfig,
             convertP7ToProfile81: convertP7ToProfile81,
             colorOverride: p5ColorOverride,
-            extradataOverride: hevcExtradataOverride,
+            extradataOverride: videoExtradataOverride,
             nalFramingOverride: measuredVideoNALFraming,
             convertsAnnexBSamples: framingNormalization.convertsAnnexBSamples,
             nalFramingLatch: NALFramingLatch(confirmed: framingMeasuredLengthPrefixed),

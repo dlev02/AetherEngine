@@ -194,4 +194,58 @@ struct InBandParameterSetRebuildTests {
         #expect(sets.sps == [0x42, 0x01, 0xB2])
         #expect(sets.pps == [0x44, 0x01, 0xC3])
     }
+
+    /// #938: mkvmerge writes `01 64 00 20 ff e0 00` for an H.264 track whose parameter sets are only
+    /// in-band. AVPlayer reaches readyToPlay on that init and never presents a frame.
+    @Test("An avcC without SPS or PPS needs the rebuild, a populated or Annex-B one does not")
+    func avcRecordPredicate() {
+        #expect(VideoConfigRecord.avcRecordNeedsInBandRebuild([0x01, 0x64, 0x00, 0x20, 0xFF, 0xE0, 0x00]))
+        #expect(VideoConfigRecord.avcRecordNeedsInBandRebuild([0x01, 0x64, 0x00, 0x20, 0xFF, 0xE0]))
+        // One SPS, zero PPS.
+        #expect(VideoConfigRecord.avcRecordNeedsInBandRebuild(
+            [0x01, 0x64, 0x00, 0x20, 0xFF, 0xE1, 0x00, 0x02, 0x67, 0x64, 0x00]))
+        // One SPS, one PPS.
+        #expect(!VideoConfigRecord.avcRecordNeedsInBandRebuild(
+            [0x01, 0x64, 0x00, 0x20, 0xFF, 0xE1, 0x00, 0x02, 0x67, 0x64, 0x01, 0x00, 0x02, 0x68, 0xEE]))
+        #expect(!VideoConfigRecord.avcRecordNeedsInBandRebuild([0x00, 0x00, 0x00, 0x01, 0x67, 0x64, 0x00]))
+        #expect(VideoConfigRecord.avcNALULengthSize([0x01, 0x64, 0x00, 0x20, 0xFF, 0xE0, 0x00]) == 4)
+        #expect(VideoConfigRecord.avcNALULengthSize([0x01, 0x64, 0x00, 0x20, 0xFD, 0xE0, 0x00]) == 2)
+        #expect(VideoConfigRecord.avcNALULengthSize([0x01, 0x64, 0x00, 0x20, 0xFE, 0xE0, 0x00]) == nil)
+    }
+
+    @Test("The H.264 collector keeps the first SPS and PPS and honours the NAL length size")
+    func h264CollectorKeepsFirstSets() {
+        func nal(_ bytes: [UInt8]) -> [UInt8] { [UInt8(bytes.count >> 8), UInt8(bytes.count & 0xFF)] + bytes }
+        let packet = nal([0x67, 0xA1]) + nal([0x68, 0xB2]) + nal([0x06, 0x05]) + nal([0x67, 0xFF]) + nal([0x65, 0x88])
+        var sets = VideoConfigRecord.H264ParameterSets()
+        packet.withUnsafeBufferPointer { sets.collect(from: $0.baseAddress!, size: $0.count, naluLengthSize: 2) }
+        #expect(sets.isComplete)
+        #expect(sets.sps == [0x67, 0xA1])
+        #expect(sets.pps == [0x68, 0xB2])
+    }
+
+    @Test("The native rebuild turns a 7-byte avcC into one with the in-band SPS and PPS",
+          .enabled(if: fixtureExists("h264-inband-avcc.mkv"),
+                   "run Scripts/fetch-fixtures.sh to generate the in-band H.264 clip"),
+          .timeLimit(.minutes(1)))
+    func h264RebuildFromInBandSets() throws {
+        let demuxer = Demuxer()
+        try demuxer.open(url: fixtureURL("h264-inband-avcc.mkv"), profile: .playback)
+        defer { demuxer.close() }
+        let videoIdx = demuxer.videoStreamIndex
+        let codecpar = try #require(demuxer.stream(at: videoIdx)?.pointee.codecpar)
+        #expect(codecpar.pointee.extradata_size == 7, "fixture must ship the bare avcC header")
+        #expect(VTCapabilityProbe.hardwareDecodeVerdict(codecpar: codecpar)
+                == .unclassifiable(reason: "in-band parameter sets"))
+
+        let engine = HLSVideoEngine(url: fixtureURL("h264-inband-avcc.mkv"), dvModeAvailable: false)
+        let record = try #require(engine.rebuildH264ExtradataWithInBandParameterSets(
+            demuxer: demuxer, videoStreamIndex: Int32(videoIdx), codecpar: codecpar))
+        #expect(record[0] == 1)
+        #expect(Array(record[1...3]) == [0x64, 0x00, 0x20], "profile, compatibility and level from the SPS")
+        #expect(record[4] & 0x03 == 3, "the source's 4-byte NAL lengths")
+        #expect(record[5] & 0x1F == 1)
+        #expect(!VideoConfigRecord.avcRecordNeedsInBandRebuild(record))
+        #expect(H264ConfigurationTracker(avcC: record) != nil, "the record parses as a full avcC")
+    }
 }
