@@ -20,6 +20,12 @@ the public-API contract.
   readers) stay off such an origin as well; the pump tap still fills the produced region. A restart that replaces
   a demuxer wedged in a read aborts that read before the fresh open there, instead of letting the new demuxer wait
   out the held slot and overcommit. Scrub stills beyond the buffer are therefore unavailable on a one-request origin.
+- **H.264 with in-band-only SPS/PPS shows a picture on the native path (#938).** An `avcC` with zero SPS or zero
+  PPS (mkvmerge writes the 7-byte `01 64 00 20 ff e0 00` for such a track) went into `init.mp4` as it was, and
+  AVPlayer played the audio with a running clock and a black picture, with no error for a fallback to act on. The
+  HEVC in-band rebuild now has an H.264 counterpart: the head of the stream is scanned for the first SPS and PPS
+  and the record is rebuilt before the init segment is written, keeping the source's NAL length size.
+  `aetherctl play` now exits 2 when a native session with video never has a frame ready for display.
 
 ## [7.53.1] - 2026-10-31
 
