@@ -12,6 +12,19 @@ the public-API contract.
 
 ### Fixed
 
+- **`preferredDecodePath = .software` now reaches an audio-only session.** The audio-only dispatch
+  read only the codec whitelist, the custom-source flag and the FLAC block floor (AE#764), so the
+  preference was silently dropped and every whitelisted codec still went to `AudioAVPlayerHost`. A
+  music host that had seen AVPlayer mistime a stream had no way onto `AudioPlaybackHost` except
+  wrapping the URL in a custom `IOReader`. Seen on an iPhone 18 Pro Max (iOS 27.0.1) with 24-bit
+  FLAC streamed over HTTP from a Plex server (about 3,000 kbps; 203.5 s by its STREAMINFO and by
+  Plex): through AVPlayer the reported time ran past the track's length and kept going while
+  audio played on (3:50 of 3:23, even in another AVPlayer-based app on the same file), on the engine's
+  own `AudioAVPlayerHost` as well as on a bare `AVQueuePlayer`. The same files on the FFmpeg host
+  end at their length. `.software` on an `audioOnly` load now routes there, and the audio dispatch
+  log line says when the host's preference decided it. Opt-in: `preferredDecodePath` defaults to
+  `.automatic`, which routes exactly as before, so a host that does not set it sees no change.
+
 - **A short forward seek on a link near the media bitrate no longer waits for the producer to play the gap in real time (#932).**
   A target 1 to 8 segments past the producer's front always waited for the march (`forwardWaitWindow`), and a march
   can only advance at the link rate, so a +30 s seek on a 74 Mbps link to a 71.5 Mbps remux took 27 to 34 s while a

@@ -1036,6 +1036,9 @@ public struct LoadOptions: Sendable, Equatable {
     /// green/purple, and a demuxed-audio live source still fails rather than playing silent.
     /// `nativeRemoteHLS` is a different route entirely (AVPlayer plays the remote playlist, nothing
     /// is demuxed), so this has nothing to act on there and the engine says so in the log.
+    ///
+    /// On an `audioOnly` session `.software` sends a codec AVPlayer could play to the FFmpeg host
+    /// (`AudioPlaybackHost`) instead of `AudioAVPlayerHost`.
     public var preferredDecodePath: DecodePath = .automatic
 
     /// Whether a native session AVPlayer refuses on its merits may be rebuilt on the software path
