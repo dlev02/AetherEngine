@@ -41,6 +41,18 @@ the public-API contract.
   before the deadline is called. Found on CI, where a 70 s stall of the one-thread cooperative pool
   declined `PersistentHLSSegmentAdmissionTests`; reproduced by blocking that thread for 50 s.
 
+- **An audio-only FLAC file seeks to the position it reports** (#946). CoreMedia's parser for the raw
+  FLAC container ignores the `SEEKTABLE` and places a seek by an estimated byte rate, then stamps the
+  requested time on whatever frame it reached. On a 203.5 s 96 kHz / 24-bit track with a quiet intro, a seek
+  to 120 s played from 100.3 s while reporting 120 s (10 s from 2.1 s, 200 s from 186.1 s), so the clock ran
+  ahead of the sound: QuickTime stopped at 3:24 with the song still playing, AVPlayer on iOS ran its clock
+  to 3:56. Playback from zero is exact, a `flac`-encoded copy and one without a seek table land the same
+  way, and the same audio as ALAC or as FLAC in MP4 lands exactly (measured with `AVAssetReader` against
+  libavcodec's decode on macOS 27). Every audio-only FLAC in the raw `flac` container now goes to the FFmpeg
+  host, which seeks by the frames themselves; the dispatch log line says so. **Host-visible:** like every
+  source the FFmpeg host plays, such a session has no `audioNowPlayingSession`, so a host drives Now
+  Playing through the shared centers for it. FLAC inside the video path's fMP4 is unaffected.
+
 - **An audio-only FLAC whose frames are smaller than its `STREAMINFO` declares plays at its real length**
   (#946). AVPlayer times every fixed-blocksize frame by `STREAMINFO`'s `max_blocksize`, so a file declaring
   4608 over real 4096-sample frames ran its clock past the end and played on (the 3:50 of 3:23 reported in

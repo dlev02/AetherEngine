@@ -91,6 +91,22 @@ struct Issue946FLACFrameBlockSizeTests {
     func mistimedRoutesToFFmpeg() {
         #expect(!AetherEngine.audioOnlyUsesAVPlayer(
             codecID: AV_CODEC_ID_FLAC, isCustomSource: false, flacBlocksTooSmall: false,
-            flacFramesMistimed: true, preferred: .automatic))
+            flacFramesMistimed: true, flacSeeksMisplaced: false, preferred: .automatic))
+    }
+
+    @Test("only the raw FLAC container has its seeks misplaced")
+    func rawFLACContainerMisplacesSeeks() {
+        #expect(AetherEngine.coreMediaMisplacesSeeks(codecID: AV_CODEC_ID_FLAC, containerFormatName: "flac"))
+        #expect(!AetherEngine.coreMediaMisplacesSeeks(codecID: AV_CODEC_ID_FLAC, containerFormatName: "mov,mp4,m4a,3gp,3g2,mj2"))
+        #expect(!AetherEngine.coreMediaMisplacesSeeks(codecID: AV_CODEC_ID_FLAC, containerFormatName: "matroska,webm"))
+        #expect(!AetherEngine.coreMediaMisplacesSeeks(codecID: AV_CODEC_ID_FLAC, containerFormatName: nil))
+        #expect(!AetherEngine.coreMediaMisplacesSeeks(codecID: AV_CODEC_ID_ALAC, containerFormatName: "flac"))
+    }
+
+    @Test("the dispatch sends a raw FLAC file to the FFmpeg host on .automatic")
+    func rawFLACRoutesToFFmpeg() {
+        #expect(!AetherEngine.audioOnlyUsesAVPlayer(
+            codecID: AV_CODEC_ID_FLAC, isCustomSource: false, flacBlocksTooSmall: false,
+            flacFramesMistimed: false, flacSeeksMisplaced: true, preferred: .automatic))
     }
 }
