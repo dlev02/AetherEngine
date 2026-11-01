@@ -5111,15 +5111,37 @@ public final class AetherEngine: ObservableObject {
                 && (probe.stream(at: resolvedInitialAudio).map {
                     FLACStreamInfo.coreMediaRejectsSource(UnsafePointer($0.pointee.codecpar))
                 } ?? false)
+            // AE#946: AVPlayer times every fixed-blocksize FLAC frame by STREAMINFO's max_blocksize, so a
+            // stream whose frames are smaller runs its clock past the real length or fails. Peeked only
+            // when AVPlayer would otherwise get the stream.
+            let flacFrameBlockSize: UInt16? = audioCodecID == AV_CODEC_ID_FLAC
+                && Self.audioOnlyUsesAVPlayer(
+                    codecID: audioCodecID, isCustomSource: isCustomSource,
+                    flacBlocksTooSmall: flacBlocksTooSmall, flacFramesMistimed: false,
+                    preferred: options.preferredDecodePath)
+                ? Self.firstFLACFrameBlockSize(demuxer: probe, streamIndex: resolvedInitialAudio)
+                : nil
+            let flacDeclaredMax = probe.stream(at: resolvedInitialAudio)
+                .flatMap { FLACStreamInfo.blockSizes(UnsafePointer($0.pointee.codecpar))?.max }
+            let flacFramesMistimed = flacFrameBlockSize.map { size in
+                probe.stream(at: resolvedInitialAudio).map {
+                    FLACStreamInfo.coreMediaMistimesFrames(UnsafePointer($0.pointee.codecpar), frameBlockSize: size)
+                } ?? false
+            } ?? false
             let useNativeAudio = Self.audioOnlyUsesAVPlayer(
                 codecID: audioCodecID, isCustomSource: isCustomSource,
-                flacBlocksTooSmall: flacBlocksTooSmall, preferred: options.preferredDecodePath)
+                flacBlocksTooSmall: flacBlocksTooSmall, flacFramesMistimed: flacFramesMistimed,
+                preferred: options.preferredDecodePath)
             // Named only when it decided the route (AVPlayer otherwise), so a host can tell its
             // preference arrived.
             let hostAskedSoftware = !useNativeAudio && Self.audioOnlyUsesAVPlayer(
                 codecID: audioCodecID, isCustomSource: isCustomSource,
-                flacBlocksTooSmall: flacBlocksTooSmall, preferred: .automatic)
-            EngineLog.emit("[AetherEngine] audio dispatch: codec=\(audioCodecID.rawValue) -> \(useNativeAudio ? "AVPlayer" : "FFmpeg")\(flacBlocksTooSmall ? " (FLAC min_blocksize below CoreMedia's floor)" : "")\(hostAskedSoftware ? " (host asked for the software path, #461)" : "")", category: .engine)
+                flacBlocksTooSmall: flacBlocksTooSmall, flacFramesMistimed: flacFramesMistimed,
+                preferred: .automatic)
+            let mistimedNote = flacFramesMistimed
+                ? " (FLAC frames carry \(flacFrameBlockSize ?? 0) samples, STREAMINFO declares \(flacDeclaredMax ?? 0), AE#946)"
+                : ""
+            EngineLog.emit("[AetherEngine] audio dispatch: codec=\(audioCodecID.rawValue) -> \(useNativeAudio ? "AVPlayer" : "FFmpeg")\(flacBlocksTooSmall ? " (FLAC min_blocksize below CoreMedia's floor)" : "")\(mistimedNote)\(hostAskedSoftware ? " (host asked for the software path, #461)" : "")", category: .engine)
             // A preserved video NativeAVPlayerHost from a native->native reload must be released before an audio
             // session; otherwise the old AVPlayer stays alive in currentAVPlayer and the volume setter writes into it.
             if nativeHost != nil {
