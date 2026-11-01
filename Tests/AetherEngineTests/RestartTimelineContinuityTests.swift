@@ -214,7 +214,7 @@ struct RestartTimelineContinuityTests {
 
 // MARK: - Subtitle pump tap (Sodalite#32)
 
-@Suite("Subtitle pump tap", .serialized)
+@Suite("Subtitle pump tap", .serialized, .offCooperativePool)
 struct SubtitlePumpTapTests {
 
     /// The pump already reads the source's full interleave; tapping the text-subtitle streams there

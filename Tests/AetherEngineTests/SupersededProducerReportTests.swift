@@ -97,7 +97,7 @@ struct SupersededProducerReportTests {
         for i in 0...4 { try session.storeWithoutSyncSample(i) }
 
         // Nothing here ever opens a gate on its own, so the seek's wait runs out.
-        let landing = await Task.detached { engine.preparedSeekLanding(itemSeconds: 14) }.value
+        let landing = await BlockingWork.detached { engine.preparedSeekLanding(itemSeconds: 14) }.value
         #expect(landing == 14)
         try await waitFor { engine.producer?.anchoredBaseIndex == 3 }
         let recut = try #require(engine.producer)
