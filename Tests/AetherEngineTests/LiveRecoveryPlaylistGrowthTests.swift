@@ -111,12 +111,16 @@ struct LiveRecoveryPlaylistGrowthTests {
                 "every repeated source must leave the admitted timeline unchanged")
         #expect(provider.liveProductionHalted)
         observed.admitNewMedia()
+        let resetsBeforeRetry = observed.sourceResets
         #expect(engine.retryLiveSourceRecovery())
+        #expect(!provider.liveProductionHalted, "the retry lifts the halt before the reopen runs")
         #expect(engine.retryLiveSourceRecovery(), "duplicate host notification coalesces")
         try await waitFor { (engine.liveSegmentCountSnapshot ?? 0) > originalCount }
         #expect(engine.cache === cache)
         #expect(engine.provider === provider)
-        #expect(!provider.liveProductionHalted)
+        // The new broadcast is finite and every later reopen repeats it, so a slow runner can see the
+        // source exhausted a second time and halted again by now. Only that may halt it.
+        #expect(!provider.liveProductionHalted || observed.sourceResets > resetsBeforeRetry)
     }
 
     @Test("a producer rebuilt in place reports into the same playlist", .timeLimit(.minutes(3)))
