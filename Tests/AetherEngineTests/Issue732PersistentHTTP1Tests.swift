@@ -192,6 +192,20 @@ final class Issue732PersistentHTTP1Tests: XCTestCase {
         XCTAssertEqual(server.connectionCount, 2)
     }
 
+    func testHeadReadsAreClampedToTheDeadline() {
+        XCTAssertEqual(PersistentHTTP1Connection.headReadTimeout(left: 40, readTimeout: 30, lateReadSpent: false), 30)
+        XCTAssertEqual(PersistentHTTP1Connection.headReadTimeout(left: 2, readTimeout: 30, lateReadSpent: false), 2)
+    }
+
+    func testADeadlineSpentWaitingForAThreadStillReadsTheSocketOnce() {
+        // A pool that held this task past the deadline (CI: a 70 s stall) must not refuse a head that
+        // arrived in time. One short read, then the deadline holds.
+        XCTAssertEqual(PersistentHTTP1Connection.headReadTimeout(left: -20, readTimeout: 30, lateReadSpent: false),
+                       PersistentHTTP1Connection.lateHeadReadTimeout)
+        XCTAssertNil(PersistentHTTP1Connection.headReadTimeout(left: -20, readTimeout: 30, lateReadSpent: true))
+        XCTAssertNil(PersistentHTTP1Connection.headReadTimeout(left: 0, readTimeout: 30, lateReadSpent: true))
+    }
+
     func testDrainPastItsDeadlineClosesAndTheNextRequestGoesAhead() async throws {
         let server = try XCTUnwrap(KeepAliveOrigin())
         defer { server.stop() }
@@ -814,13 +828,15 @@ struct PersistentHLSSegmentAdmissionTests {
             return .init(body: encryptedFrom.map { index >= $0 } == true
                 ? Issue732PersistentHTTP1Tests.aes128CBC(clear, key: key) : clear)
         }
-        // The factory turns a probe error into nil and only logs it. CI declined once under load
-        // (main d6c46ee6) and nothing said why, so a failure carries the logged reason.
+        // The factory turns a probe error into nil and only logs it. CI declined under load (main
+        // d6c46ee6, deeed435) and nothing said why, so a failure carries the logged reason. The capture
+        // is process-wide, so it filters on the factory's own decline line: the [HLSVODIngest] prefix
+        // alone came back as six "resolved" lines from other tests. No line means a non-HEVC verdict.
         let log = EngineLogCapture()
         defer { log.end() }
         let reader = try #require(try await HLSVODIngestReader.makeIfHEVCMPEGTS(
             playlistURL: server.url("/vod.m3u8"), httpHeaders: [:], persistentHTTP1: true),
-            "declined: \(log.matching("[HLSVODIngest]").suffix(6))")
+            "declined: \(log.matching("carriage probe inconclusive"))")
         defer { reader.close() }
         let firstRead = ProbeTestJob { () -> Int32 in
             var bytes = [UInt8](repeating: 0, count: 188)

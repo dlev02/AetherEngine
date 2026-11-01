@@ -12,6 +12,14 @@ the public-API contract.
 
 ### Fixed
 
+- **A persistent HTTP/1.1 request no longer fails its response-head deadline on the client's own
+  scheduling delay** (#732 follow-up). The 45 s head deadline was checked before each read, so a task
+  that got its thread back only after the deadline threw `headDeadlineExceeded` without looking at the
+  socket, and an HLS VOD ingest whose origin had answered in milliseconds was declined. When the
+  deadline has run out by the time the task resumes, one 0.5 s read now takes what has already arrived
+  before the deadline is called. Found on CI, where a 70 s stall of the one-thread cooperative pool
+  declined `PersistentHLSSegmentAdmissionTests`; reproduced by blocking that thread for 50 s.
+
 - **An audio-only FLAC whose frames are smaller than its `STREAMINFO` declares plays at its real length**
   (#946). AVPlayer times every fixed-blocksize frame by `STREAMINFO`'s `max_blocksize`, so a file declaring
   4608 over real 4096-sample frames ran its clock past the end and played on (the 3:50 of 3:23 reported in
