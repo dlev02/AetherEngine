@@ -19,8 +19,9 @@ the public-API contract.
   started, tvOS reported such switches ending after ~2.5 s, and three of six starts flashed pink noise over
   the black. The engine now reads the panel's cadence across the probe, before it writes the criteria.
   When the panel was already at the rate (the #449 case, a start that never sees an end) the exit stays;
-  when it had to switch, the gate waits for the end notification, the in-progress flag or the 6 s cap, as
-  an HDR start does. `SET:` names the pre-write reading, and a gate that declines the reading says so.
+  when it had to switch, the gate waits for the end notification, the in-progress flag or the cap (6 s
+  for VOD; live keeps its 2 s cap, so a live zap still releases before a ~2.5 s re-lock). `SET:` names
+  the pre-write reading, and a gate that declines the reading says so.
 
 - **A persistent HTTP/1.1 request no longer fails its response-head deadline on the client's own
   scheduling delay** (#732 follow-up). The 45 s head deadline was checked before each read, so a task

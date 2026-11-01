@@ -83,6 +83,8 @@ final class DisplayCriteriaController {
     /// AE#950: how the panel's cadence just before a write related to the rate that write asked for, keyed
     /// by the arm generation of that write so a later gate without a write of its own cannot read it.
     private var preWriteRelation: (armGeneration: Int, relation: PanelRateRelation)?
+    /// AE#950: which load the running pre-write reading belongs to (`beginPreWriteCadence`).
+    private var preWriteCadenceToken = 0
 
     /// The arm generation whose record has been spent. Only a gate that ends the load's wait spends it, so
     /// both gates of one load see the same evidence while a later, unarmed gate sees none
@@ -943,18 +945,29 @@ final class DisplayCriteriaController {
     /// `apply()` can tell a panel already at the requested rate from one that has to switch to it. Called
     /// at the start of a load, before the probe whose result decides the rate: a display link needs a tick
     /// before it says anything, and the write itself follows the probe without a pause. `apply()` stops it.
-    func beginPreWriteCadence() {
+    ///
+    /// Returns the token the load hands back to `endPreWriteCadence(token:)`. A newer load replaces the
+    /// reading of one it superseded, so the older load's exit cannot stop the reading the newer one needs.
+    @discardableResult
+    func beginPreWriteCadence() -> Int {
+        preWriteCadenceToken &+= 1
         #if os(tvOS)
-        guard preWriteCadence == nil, let window = resolveWindow() else { return }
-        let sampler = DisplayLinkSampler()
-        sampler.start(screen: window.screen)
-        preWriteCadence = sampler
+        preWriteCadence?.invalidate()
+        preWriteCadence = nil
+        if let window = resolveWindow() {
+            let sampler = DisplayLinkSampler()
+            sampler.start(screen: window.screen)
+            preWriteCadence = sampler
+        }
         #endif
+        return preWriteCadenceToken
     }
 
-    /// Stop the pre-write reading. Idempotent, and also called by the load that started it on every exit,
-    /// so a load that never writes criteria (audio only, a host that owns them) does not leave it running.
-    func endPreWriteCadence() {
+    /// Stop the pre-write reading. Idempotent. A load calls it with its token on every exit, so one that
+    /// never writes criteria (audio only, a host that owns them) does not leave it running; `apply()`
+    /// calls it without one, because the write is what the reading was for.
+    func endPreWriteCadence(token: Int? = nil) {
+        if let token, token != preWriteCadenceToken { return }
         #if os(tvOS)
         preWriteCadence?.invalidate()
         preWriteCadence = nil
