@@ -159,7 +159,7 @@ struct SharedOutputCoordinatorTests {
         let c = SharedOutputCoordinator()
         let journal = Journal()
         _ = c.enqueueTransition {
-            try? await Task.sleep(for: .milliseconds(100))
+            try? await Task.sleep(for: .milliseconds(100)) // hygiene: allow one-shot delay inside the transition under test, not a wait
             await journal.note("activation by A")
         }
         let release = c.enqueueTransition { await journal.note("release by B") }
