@@ -177,7 +177,7 @@ struct BackgroundKeepaliveTests {
 
     @MainActor
     @Test("a retained background seek applies its final transport policy (AE#870)",
-          .timeLimit(.minutes(1)), arguments: [
+          .timeLimit(.minutes(3)), arguments: [
             (true, true, true), (true, true, false), (true, false, true), (true, false, false),
             (false, true, true), (false, true, false), (false, false, true), (false, false, false),
           ])

@@ -30,7 +30,7 @@ struct InBandParameterSetRebuildTests {
     @Test("The rebuild finds the parameter sets from a mid-GOP cursor",
           .enabled(if: fixtureExists("hev1-inband-xps.mp4"),
                    "run Scripts/fetch-fixtures.sh to generate the in-band xPS clip"),
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func rebuildIsIndependentOfDemuxerCursor() throws {
         let demuxer = Demuxer()
         try demuxer.open(url: fixtureURL("hev1-inband-xps.mp4"), profile: .playback)
@@ -67,7 +67,7 @@ struct InBandParameterSetRebuildTests {
     @Test("Completing the record in place makes the strict verdict classifiable and rewinds",
           .enabled(if: fixtureExists("hev1-inband-xps.mp4"),
                    "run Scripts/fetch-fixtures.sh to generate the in-band xPS clip"),
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func completionInPlace() throws {
         let demuxer = Demuxer()
         try demuxer.open(url: fixtureURL("hev1-inband-xps.mp4"), profile: .playback)
@@ -115,7 +115,7 @@ struct InBandParameterSetRebuildTests {
     @Test("A spent byte budget leaves the record as it was and the demuxer at the head",
           .enabled(if: fixtureExists("hev1-inband-xps.mp4"),
                    "run Scripts/fetch-fixtures.sh to generate the in-band xPS clip"),
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func spentByteBudgetLeavesRecordAlone() throws {
         let demuxer = Demuxer()
         try demuxer.open(url: fixtureURL("hev1-inband-xps.mp4"), profile: .playback)
@@ -153,7 +153,7 @@ struct InBandParameterSetRebuildTests {
     }
 
     @Test("A junk tail ends the scan on the input byte budget and the demuxer is rewound, on a custom reader",
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func junkTailOnACustomReader() throws {
         let data = try TailHeavyMatroska.make(foreignBytes: Self.junkBytes, junkTail: true, bareRecord: true)
         try ProbeTestFixtures.withFile(data) { url in
@@ -165,7 +165,7 @@ struct InBandParameterSetRebuildTests {
     }
 
     @Test("A junk tail ends the scan on the input byte budget and the demuxer is rewound, on a local file",
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func junkTailOnALocalFile() throws {
         let data = try TailHeavyMatroska.make(foreignBytes: Self.junkBytes, junkTail: true, bareRecord: true)
         try ProbeTestFixtures.withFile(data) { url in
@@ -227,7 +227,7 @@ struct InBandParameterSetRebuildTests {
     @Test("The native rebuild turns a 7-byte avcC into one with the in-band SPS and PPS",
           .enabled(if: fixtureExists("h264-inband-avcc.mkv"),
                    "run Scripts/fetch-fixtures.sh to generate the in-band H.264 clip"),
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func h264RebuildFromInBandSets() throws {
         let demuxer = Demuxer()
         try demuxer.open(url: fixtureURL("h264-inband-avcc.mkv"), profile: .playback)

@@ -35,7 +35,7 @@ private enum UpscalerGate {
 
 /// One frame in, one frame out: sizes, colour tags, flat-field fidelity, mid-stream size changes and
 /// the disable paths. GPU and OS 26 gated; the ML tests also need VT low-latency super resolution.
-@Suite("Frame upscaler", .serialized, .timeLimit(.minutes(1)), .enabled(if: UpscalerGate.gpuAvailable))
+@Suite("Frame upscaler", .serialized, .timeLimit(.minutes(3)), .enabled(if: UpscalerGate.gpuAvailable))
 struct FrameUpscalerTests {
 
     private static let uhd = CGSize(width: 3840, height: 2160)

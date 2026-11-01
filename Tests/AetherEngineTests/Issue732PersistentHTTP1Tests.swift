@@ -775,7 +775,7 @@ final class KeepAliveOrigin: @unchecked Sendable {
     }
 }
 
-@Suite("Persistent HLS segment-boundary admission", .serialized, .timeLimit(.minutes(1)))
+@Suite("Persistent HLS segment-boundary admission", .serialized, .timeLimit(.minutes(3)))
 struct PersistentHLSSegmentAdmissionTests {
     enum Exit: String, CaseIterable, Sendable { case consume, seek, close, cancel }
 

@@ -7,6 +7,9 @@
   - `DispatchQueue.global(...).async` / `.asyncAfter`: the global pool does not start a block while
     its workers are blocked, which a full parallel run of this suite produces (35 s and counting,
     against 3 ms for a detached thread). Parking or timing work goes on `Thread.detachNewThread`.
+  - `.timeLimit` under 2 minutes: the limit is the hang catcher, and a green run of this suite has
+    hundreds of tests above 60 s, so one minute reported healthy tests as hangs (20 at once on
+    2026-10-26). The house value is `.minutes(3)`.
 
 A line that is a justified exception carries `// hygiene: allow <reason>`. Comments and string literals
 that only mention a pattern are not flagged. Stdlib only, so it runs on the ubuntu docs job.
@@ -22,6 +25,8 @@ RULES = [
      "try? swallows the .timeLimit cancellation; use try await (or do/catch and return)"),
     (re.compile(r"DispatchQueue\.global\([^)]*\)\.async"),
     "the global pool starves under a full run; use Thread.detachNewThread"),
+    (re.compile(r"\.timeLimit\(\s*\.(seconds|milliseconds)\(|\.timeLimit\(\s*\.minutes\(\s*1\s*\)"),
+     "a time limit under 2 minutes is a coin flip on the runner; use .minutes(3)"),
 ]
 ALLOW = re.compile(r"//\s*hygiene:\s*allow\s+\S")
 

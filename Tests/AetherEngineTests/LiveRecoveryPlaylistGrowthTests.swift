@@ -62,7 +62,7 @@ struct LiveRecoveryPlaylistGrowthTests {
         return bytes
     }
 
-    @Test("segments a reopened live producer cuts reach the playlist", .timeLimit(.minutes(1)))
+    @Test("segments a reopened live producer cuts reach the playlist", .timeLimit(.minutes(3)))
     func reopenedProducerGrowsThePlaylist() async throws {
         let observed = Observed()
         let engine = HLSVideoEngine(
@@ -88,7 +88,7 @@ struct LiveRecoveryPlaylistGrowthTests {
         try await waitFor { (engine.liveSegmentCountSnapshot ?? 0) > beforeLoss }
     }
 
-    @Test("an exhausted repeated source resumes into the same DVR when new media arrives", .timeLimit(.minutes(1)))
+    @Test("an exhausted repeated source resumes into the same DVR when new media arrives", .timeLimit(.minutes(3)))
     func parkedReplayRecoveryResumesWithoutAppendingOldMedia() async throws {
         let observed = Observed()
         let engine = HLSVideoEngine(url: URL(string: "aether-custom://source")!,
@@ -119,7 +119,7 @@ struct LiveRecoveryPlaylistGrowthTests {
         #expect(!provider.liveProductionHalted)
     }
 
-    @Test("a producer rebuilt in place reports into the same playlist", .timeLimit(.minutes(1)))
+    @Test("a producer rebuilt in place reports into the same playlist", .timeLimit(.minutes(3)))
     func rebuiltProducerReportsIntoThePlaylist() async throws {
         let observed = Observed()
         let engine = HLSVideoEngine(

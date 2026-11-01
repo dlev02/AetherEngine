@@ -4,7 +4,7 @@ import AVFoundation
 @testable import AetherEngine
 
 @Suite("AE#711 follow-up: the native picture held across an in-place item swap", .serialized,
-       .timeLimit(.minutes(1)))
+       .timeLimit(.minutes(3)))
 @MainActor
 struct ItemSwapStillTests {
 

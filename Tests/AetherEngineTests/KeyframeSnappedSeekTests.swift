@@ -128,7 +128,7 @@ struct KeyframeSnappedSeekTests {
     /// Measured on an Apple TV 4K (A15), 4K AV1 with a 6.7 s GOP: a hit onto a keyframe held the
     /// clock 1.8 to 2.5 s while dav1d decoded the GOP before it, a miss onto one 0.48 s.
     @Test("A cache hit for AV1 starts on the last keyframe before the target, not on the one before it",
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func cacheHitStartsOnTheLastKeyframe() async throws {
         #expect(try await cacheHitStart(anchorsOnLastKeyframe: false) == 4000)
         #expect(try await cacheHitStart(anchorsOnLastKeyframe: true) == 5000)

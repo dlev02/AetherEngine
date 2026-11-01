@@ -75,6 +75,24 @@ jobs:
           LIBDISPATCH_COOPERATIVE_POOL_STRICT: "1"
         run: swift test --skip-build --disable-xctest
 
+      # Standalone swiftc builds. They link FFmpegBuild out of `.build/checkouts`, so they ride in the
+      # job that resolved it. Each script compiles a hand-picked file list, so a new reference in a
+      # file under test breaks it: add the real file to the list, never a stub (a build with shims
+      # compiles a different file).
+      - name: Software VOD packet-cache regressions
+        run: |
+          bash Scripts/test-software-packet-coverage.sh
+          bash Scripts/test-software-video-packet-coverage.sh
+          bash Scripts/test-software-packet-disk-fifo.sh
+          bash Scripts/test-software-packet-read-ahead.sh
+          bash Scripts/test-software-read-admission.sh
+          bash Scripts/test-software-stored-packet.sh
+
+      - name: Partial H.264 composition-offset runtime regression
+        run: |
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          bash Scripts/test-h264-partial-composition-controls.sh
+
   # The optional components (TrueHDObjectAudio, DTSXObjectAudio, DualLayerDolbyVision) are off by
   # default, so the job above builds and tests without them. This one keeps the opt-in code compiling
   # and its tests running, in parallel instead of after the default run.
@@ -103,7 +121,7 @@ jobs:
         run: swift test --enable-all-traits --skip-build --disable-xctest
 
   build-tvos:
-    name: xcodebuild (tvOS Simulator) + script regressions
+    name: xcodebuild (tvOS Simulator)
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
@@ -135,23 +153,6 @@ jobs:
             -derivedDataPath .build/xcode-tvos \
             EXCLUDED_ARCHS=x86_64 \
             CODE_SIGNING_ALLOWED=NO
-
-      # Standalone swiftc builds, here because this is the shortest of the four jobs. Each script
-      # compiles a hand-picked file list, so a new reference in a file under test breaks it: add the
-      # real file to the list, never a stub (a build with shims compiles a different file).
-      - name: Software VOD packet-cache regressions
-        run: |
-          bash Scripts/test-software-packet-coverage.sh
-          bash Scripts/test-software-video-packet-coverage.sh
-          bash Scripts/test-software-packet-disk-fifo.sh
-          bash Scripts/test-software-packet-read-ahead.sh
-          bash Scripts/test-software-read-admission.sh
-          bash Scripts/test-software-stored-packet.sh
-
-      - name: Partial H.264 composition-offset runtime regression
-        run: |
-          command -v ffmpeg >/dev/null || brew install ffmpeg
-          bash Scripts/test-h264-partial-composition-controls.sh
 
   build-ios:
     name: xcodebuild (iOS Simulator)
