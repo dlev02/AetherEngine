@@ -196,12 +196,14 @@ final class Issue732PersistentHTTP1Tests: XCTestCase {
         let server = try XCTUnwrap(KeepAliveOrigin())
         defer { server.stop() }
         let segments = (0..<5).map { "seg\($0).ts" }
-        // Fast enough to look drainable, then silent: only the drain deadline ends it.
+        // One packet short, then silent: drainable at any rate the seek could measure, however late
+        // a loaded runner gets to it, so only the drain deadline ends it. A larger remainder turns
+        // undrainable once the seek comes more than a few hundred ms after the body began.
         server.route = { path in
             if path == "/vod.m3u8" { return .init(body: Self.mediaPlaylist(segments)) }
             guard let index = segments.firstIndex(where: { "/" + $0 == path }) else { return .init(status: 404) }
             return index == 1
-                ? .init(body: Self.transportStream(marker: 1, packets: 1_000), stallAfter: 188 * 100)
+                ? .init(body: Self.transportStream(marker: 1, packets: 101), stallAfter: 188 * 100)
                 : .init(body: Self.transportStream(marker: UInt8(index)))
         }
         let made = try await HLSVODIngestReader.makeIfHEVCMPEGTS(

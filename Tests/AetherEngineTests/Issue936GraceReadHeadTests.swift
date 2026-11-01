@@ -130,12 +130,13 @@ final class Issue936GraceReadHeadTests: XCTestCase {
             provider.appendLiveSegment(index: index, startSeconds: Double(index) * 5, durationSeconds: 5)
         }
         let started = DispatchTime.now()
+        // The head follows the wall clock, not the sleep: a usleep that overslept on a loaded runner
+        // would read as a slower source and end the grace for a burst that is still arriving.
         let feeder = Thread {
-            var pts = 20.0
             while result.value == nil {
-                provider.noteLiveReadHead(ptsSeconds: pts)
+                let seconds = Double(DispatchTime.now().uptimeNanoseconds - started.uptimeNanoseconds) / 1_000_000_000
+                provider.noteLiveReadHead(ptsSeconds: 20 + seconds * rate)
                 usleep(20_000)
-                pts += 0.02 * rate
             }
         }
         feeder.start()
