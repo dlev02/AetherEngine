@@ -12,6 +12,16 @@ the public-API contract.
 
 ### Fixed
 
+- **The low-resolution upscale route stays off on any AirPlay route, and a stage that switched itself
+  off hands the session back to the native path** (#846). The route refused only an AirPlay receiver that
+  shows the video, so with AirPlay speakers holding the sound and the picture on HDMI it moved a natively
+  playable SD episode onto the software path, where a seek left the speakers silent (7.53.1, tvOS 27.2).
+  Any wireless AirPlay route now keeps the usual route. A stage that disabled itself (there: the
+  VideoToolbox super-resolution pass failing three frames in a row) left the session on software with no
+  upscaling; its plan is now remembered for the process at that frame rate or faster, and a URL VOD session
+  that only the stage moved to software reloads at the current position onto the native path once it is
+  playing or paused. Custom `IOReader` sources and live sessions keep the software path.
+
 - **An SDR start that changes the panel's refresh rate waits for the switch to end before playing**
   (#950). The #449 exit released the play gate as soon as the display link read the requested rate, and a
   display link reads the new cadence once the compositor runs at it, long before the HDMI sink has

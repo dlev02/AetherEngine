@@ -61,6 +61,7 @@ public final class AetherEngine: ObservableObject {
             if case .error = state {} else { errorInfo = nil }
             recomputePlaybackPhase()
             resolveLoadingStashedSeek(from: oldValue)
+            if upscaleNativeReturnOwed != nil { settleOwedUpscaleNativeReturn() }
             if Self.backgroundPolicyIsOwedOnResume(
                 isBackgrounded: isBackgrounded, retainsPausedPipeline: retainsVideoPipelineWhenBackgrounded,
                 from: oldValue, to: state
@@ -702,6 +703,15 @@ public final class AetherEngine: ObservableObject {
 
     /// #846: set when the session's stage disabled itself, so no later host of the session builds one again.
     var sourceUpscaleDisabled: UpscaleStatus? = nil
+
+    /// #846: the source frame rate the upscale decision read, which the failure memory is keyed with.
+    var sourceUpscaleFrameRate: Double? = nil
+
+    /// #846: the routing would have played this session natively, and only the upscale route took it to software.
+    var sourceSoftwareOnlyForUpscale = false
+
+    /// #846: the load generation whose disabled stage still owes the return to the native path.
+    var upscaleNativeReturnOwed: UInt64? = nil
 
     /// Whether the loaded source's Dolby Vision has a base layer `LoadOptions.dolbyVisionHandling =
     /// .baseLayerOnly` can present (`VideoRoutingPolicy.dolbyVisionBaseLayerIsPresentable`), decided
@@ -4618,6 +4628,8 @@ public final class AetherEngine: ObservableObject {
         sourceElType = nil
         sourceUpscalePlan = nil
         sourceUpscaleDisabled = nil
+        sourceSoftwareOnlyForUpscale = false
+        sourceUpscaleFrameRate = nil
         sourceDVBLCompatID = nil
         sourceDolbyVisionBaseLayerPresentable = false
         sourceDolbyVisionRPUProfile = nil
@@ -5519,8 +5531,9 @@ public final class AetherEngine: ObservableObject {
         }
         let dualLayerSeekable = probeOpened && probe.videoStreamIndex >= 0 && probe.isSourceSeekable
         // Read once: the route can change between the pre-probe check and the decision, and the two must agree.
+        let wirelessAirPlayRoute = Self.isWirelessAirPlayRoute()
         let airPlayVideoReceiver = Self.airPlayVideoReceiverHoldsRoute(
-            wirelessAirPlayRoute: Self.isWirelessAirPlayRoute(), receiverShowsVideo: airPlayReceiverShowsVideo)
+            wirelessAirPlayRoute: wirelessAirPlayRoute, receiverShowsVideo: airPlayReceiverShowsVideo)
         if DualLayerRouteDecision.blockingReasonBeforeProbe(
             codecID: detectedCodecID,
             dvProfile: detectedDVProfileNum,
@@ -5762,7 +5775,7 @@ public final class AetherEngine: ObservableObject {
                 options: options,
                 videoStream: probeOpened ? probe.stream(at: probe.videoStreamIndex) : nil,
                 dvProfile: detectedDVProfileNum,
-                airPlayVideoReceiver: airPlayVideoReceiver,
+                wirelessAirPlayRoute: wirelessAirPlayRoute,
                 demuxedAudioLive: SessionOptionCorrection.isDemuxedAudioLive(
                     isLive: options.isLive,
                     hasCompanionAudioReader: (customReader as? LiveIngestSourceInfo)?.companionAudioReader != nil))
@@ -5770,6 +5783,7 @@ public final class AetherEngine: ObservableObject {
             EngineLog.emit(line, category: .engine)
         }
         sourceUpscalePlan = upscaleDecision.plan
+        sourceSoftwareOnlyForUpscale = sourceUpscalePlan != nil && !useSoftwarePath
         if sourceUpscalePlan != nil { useSoftwarePath = true }
         // TEST-ONLY: forces SW path for aetherctl live --sw; unset in shipping builds.
         if Self.forceSoftwarePathForTesting {
@@ -7147,6 +7161,8 @@ public final class AetherEngine: ObservableObject {
         sourceElType = nil
         sourceUpscalePlan = nil
         sourceUpscaleDisabled = nil
+        sourceSoftwareOnlyForUpscale = false
+        sourceUpscaleFrameRate = nil
         sourceDVBLCompatID = nil
         sourceDolbyVisionBaseLayerPresentable = false
         sourceDolbyVisionRPUProfile = nil
@@ -8621,8 +8637,10 @@ public final class AetherEngine: ObservableObject {
     }
 
     private var backgroundDecisionMustWait: Bool {
-        !Self.backgroundDecisionSettles(state: state, loadInFlight: loadInFlightGeneration == loadGeneration)
+        !Self.backgroundDecisionSettles(state: state, loadInFlight: loadInFlight)
     }
+
+    var loadInFlight: Bool { loadInFlightGeneration == loadGeneration }
 
     func beginLoadInFlight(_ generation: UInt64) {
         loadInFlightGeneration = generation
@@ -8633,6 +8651,7 @@ public final class AetherEngine: ObservableObject {
         guard loadInFlightGeneration == generation else { return }
         loadInFlightGeneration = nil
         settleOwedBackgroundAction()
+        settleOwedUpscaleNativeReturn()
     }
 
     /// didEnterBackground's bookkeeping. Audit CORE-2: a load or seek in flight has a pipeline
