@@ -97,7 +97,7 @@ extension AetherEngine {
         else { return }
         guard upscaleNativeReturnOwed != loadGeneration else { return }
         upscaleNativeReturnOwed = loadGeneration
-        if !loadInFlight { settleOwedUpscaleNativeReturn() }
+        settleOwedUpscaleNativeReturn()
     }
 
     /// Whether a disabled stage hands the session back to the native path. Only a session the stage alone
@@ -110,11 +110,13 @@ extension AetherEngine {
         softwareOnlyForUpscale && !isCustomSource && !isLive
     }
 
-    /// Runs the owed return once no load is in flight; called again from the load's own exit.
+    /// Runs the owed return once no load is in flight and the session is playing or paused; called again
+    /// from the load's own exit and from every state change, so a disable during a seek is not lost.
     func settleOwedUpscaleNativeReturn() {
         guard let owed = upscaleNativeReturnOwed else { return }
+        guard owed == loadGeneration else { upscaleNativeReturnOwed = nil; return }
+        guard !loadInFlight, state == .playing || state == .paused else { return }
         upscaleNativeReturnOwed = nil
-        guard owed == loadGeneration, state == .playing || state == .paused else { return }
         EngineLog.emit("[Upscale] stage disabled on a session it alone put on the software path: "
                        + "reloading at the current position on the native path", category: .engine)
         Task { @MainActor [weak self] in

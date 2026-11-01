@@ -61,6 +61,7 @@ public final class AetherEngine: ObservableObject {
             if case .error = state {} else { errorInfo = nil }
             recomputePlaybackPhase()
             resolveLoadingStashedSeek(from: oldValue)
+            if upscaleNativeReturnOwed != nil { settleOwedUpscaleNativeReturn() }
             if Self.backgroundPolicyIsOwedOnResume(
                 isBackgrounded: isBackgrounded, retainsPausedPipeline: retainsVideoPipelineWhenBackgrounded,
                 from: oldValue, to: state
