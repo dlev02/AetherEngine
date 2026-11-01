@@ -665,17 +665,28 @@ extension AetherEngine {
     /// Whether an audio-only session goes to AVPlayer (`AudioAVPlayerHost`) rather than libavcodec
     /// (`AudioPlaybackHost`). AVPlayer needs a URL it can read and a codec on the whitelist, and
     /// takes neither a FLAC whose blocks are under CoreMedia's floor (AE#764), nor a FLAC whose frames
-    /// are smaller than `STREAMINFO`'s `max_blocksize` (AE#946, AVPlayer mistimes it), nor
-    /// a session the host asked onto `.software`.
+    /// are smaller than `STREAMINFO`'s `max_blocksize` (AE#946, AVPlayer mistimes it), nor a raw FLAC
+    /// file (AE#946, AVPlayer seeks it to the wrong place), nor a session the host asked onto `.software`.
     nonisolated static func audioOnlyUsesAVPlayer(
         codecID: AVCodecID,
         isCustomSource: Bool,
         flacBlocksTooSmall: Bool,
         flacFramesMistimed: Bool,
+        flacSeeksMisplaced: Bool,
         preferred: DecodePath
     ) -> Bool {
         !isCustomSource && avPlayerCanDecodeAudio(codecID) && !flacBlocksTooSmall && !flacFramesMistimed
-            && preferred != .software
+            && !flacSeeksMisplaced && preferred != .software
+    }
+
+    /// AE#946: CoreMedia's parser for the raw FLAC container ignores `SEEKTABLE` and places a seek by
+    /// an estimated byte rate, then stamps the requested time on whatever frame it reached. On real
+    /// music that lands seconds early (a 96/24 track with a quiet intro: 120 s played from 100.3 s,
+    /// reported as 120 s), so the clock runs ahead of the sound and the track ends while it is still
+    /// playing. Playback from zero is exact, and FLAC inside MP4 (`dfLa`) seeks exactly; only the
+    /// bare `flac` container is affected, whatever encoder wrote it.
+    nonisolated static func coreMediaMisplacesSeeks(codecID: AVCodecID, containerFormatName: String?) -> Bool {
+        codecID == AV_CODEC_ID_FLAC && containerFormatName == "flac"
     }
 
     /// AE#946: how many packets the audio-only dispatch looks through for the first FLAC frame. An

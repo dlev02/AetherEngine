@@ -23,7 +23,7 @@ struct AudioCodecRoutingTests {
     func automaticKeepsAVPlayer() {
         for id in [AV_CODEC_ID_FLAC, AV_CODEC_ID_ALAC, AV_CODEC_ID_AAC, AV_CODEC_ID_MP3] {
             #expect(AetherEngine.audioOnlyUsesAVPlayer(
-                codecID: id, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: false, preferred: .automatic))
+                codecID: id, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: false, flacSeeksMisplaced: false, preferred: .automatic))
         }
     }
 
@@ -34,7 +34,7 @@ struct AudioCodecRoutingTests {
     func softwareOverridesAVPlayer() {
         for id in [AV_CODEC_ID_FLAC, AV_CODEC_ID_ALAC, AV_CODEC_ID_AAC, AV_CODEC_ID_MP3] {
             #expect(AetherEngine.audioOnlyUsesAVPlayer(
-                codecID: id, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: false, preferred: .software) == false)
+                codecID: id, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: false, flacSeeksMisplaced: false, preferred: .software) == false)
         }
     }
 
@@ -42,13 +42,13 @@ struct AudioCodecRoutingTests {
     func existingRulesHold() {
         for preferred in DecodePath.allCases {
             #expect(AetherEngine.audioOnlyUsesAVPlayer(
-                codecID: AV_CODEC_ID_OPUS, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: false, preferred: preferred) == false)
+                codecID: AV_CODEC_ID_OPUS, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: false, flacSeeksMisplaced: false, preferred: preferred) == false)
             #expect(AetherEngine.audioOnlyUsesAVPlayer(
-                codecID: AV_CODEC_ID_FLAC, isCustomSource: true, flacBlocksTooSmall: false, flacFramesMistimed: false, preferred: preferred) == false)
+                codecID: AV_CODEC_ID_FLAC, isCustomSource: true, flacBlocksTooSmall: false, flacFramesMistimed: false, flacSeeksMisplaced: false, preferred: preferred) == false)
             #expect(AetherEngine.audioOnlyUsesAVPlayer(
-                codecID: AV_CODEC_ID_FLAC, isCustomSource: false, flacBlocksTooSmall: true, flacFramesMistimed: false, preferred: preferred) == false)
+                codecID: AV_CODEC_ID_FLAC, isCustomSource: false, flacBlocksTooSmall: true, flacFramesMistimed: false, flacSeeksMisplaced: false, preferred: preferred) == false)
             #expect(AetherEngine.audioOnlyUsesAVPlayer(
-                codecID: AV_CODEC_ID_FLAC, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: true, preferred: preferred) == false)
+                codecID: AV_CODEC_ID_FLAC, isCustomSource: false, flacBlocksTooSmall: false, flacFramesMistimed: true, flacSeeksMisplaced: false, preferred: preferred) == false)
         }
     }
 }
