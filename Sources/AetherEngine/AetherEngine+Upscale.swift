@@ -12,7 +12,7 @@ extension AetherEngine {
 
     func upscaleRouteDecision(
         options: LoadOptions, videoStream: UnsafeMutablePointer<AVStream>?, dvProfile: Int?,
-        airPlayVideoReceiver: Bool, demuxedAudioLive: Bool
+        wirelessAirPlayRoute: Bool, demuxedAudioLive: Bool
     ) -> UpscaleRouteDecision {
         // Spares the off case the Metal device and the display read below.
         guard options.upscalesLowResolutionVideo else { return .notTaken(.preferenceOff) }
@@ -50,8 +50,8 @@ extension AetherEngine {
             preference: true, osSupportsStage: osSupportsStage, metalFXSupported: metalFXSupported,
             source: source, isSDR: isSDR, isDolbyVision: dvProfile != nil, isEightBit420: isEightBit420,
             display: DisplayPixelSize.current() ?? .zero,
-            airPlayVideoReceiver: airPlayVideoReceiver, demuxedAudioLive: demuxedAudioLive,
-            mlScaleFactors: mlScaleFactors)
+            wirelessAirPlayRoute: wirelessAirPlayRoute, demuxedAudioLive: demuxedAudioLive,
+            mlScaleFactors: mlScaleFactors, stageFailedEarlier: UpscaleFailureMemory.contains)
     }
 
     /// Connects the stage `host`'s load built to `activeUpscale`. The host's load can already have run it
@@ -90,5 +90,40 @@ extension AetherEngine {
         let status = UpscaleStatus.afterDisable(reason: reason, current: activeUpscale, plan: plan)
         activeUpscale = status
         sourceUpscaleDisabled = status
+        UpscaleFailureMemory.record(plan)
+        guard Self.upscaleDisableReturnsToNative(
+            softwareOnlyForUpscale: sourceSoftwareOnlyForUpscale, isCustomSource: isCustomSource,
+            isLive: loadedOptions.isLive)
+        else { return }
+        guard upscaleNativeReturnOwed != loadGeneration else { return }
+        upscaleNativeReturnOwed = loadGeneration
+        if !loadInFlight { settleOwedUpscaleNativeReturn() }
+    }
+
+    /// Whether a disabled stage hands the session back to the native path. Only a session the stage alone
+    /// put on the software path, and only a URL VOD source: its rebuild re-runs `load()`, which no longer
+    /// takes the route (`UpscaleFailureMemory`), while a custom source's rebuild keeps its backend and a
+    /// live one rejoins at the edge.
+    nonisolated static func upscaleDisableReturnsToNative(
+        softwareOnlyForUpscale: Bool, isCustomSource: Bool, isLive: Bool
+    ) -> Bool {
+        softwareOnlyForUpscale && !isCustomSource && !isLive
+    }
+
+    /// Runs the owed return once no load is in flight; called again from the load's own exit.
+    func settleOwedUpscaleNativeReturn() {
+        guard let owed = upscaleNativeReturnOwed else { return }
+        upscaleNativeReturnOwed = nil
+        guard owed == loadGeneration, state == .playing || state == .paused else { return }
+        EngineLog.emit("[Upscale] stage disabled on a session it alone put on the software path: "
+                       + "reloading at the current position on the native path", category: .engine)
+        Task { @MainActor [weak self] in
+            guard let self, self.loadGeneration == owed else { return }
+            do {
+                try await self.reloadAtCurrentPosition()
+            } catch {
+                EngineLog.emit("[Upscale] native return failed: \(error)", category: .engine)
+            }
+        }
     }
 }
