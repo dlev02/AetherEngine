@@ -12,6 +12,17 @@ the public-API contract.
 
 ### Fixed
 
+- **An audio-only FLAC whose frames are smaller than its `STREAMINFO` declares plays at its real length**
+  (#946). AVPlayer times every fixed-blocksize frame by `STREAMINFO`'s `max_blocksize`, so a file declaring
+  4608 over real 4096-sample frames ran its clock past the end and played on (the 3:50 of 3:23 reported in
+  #939, a ratio of 4608/4096), and one declaring 4096/4608 over the same frames failed with `-12842`.
+  Measured on macOS 26 with `flac`-encoded 96 kHz / 24-bit files whose `STREAMINFO` was patched. The
+  audio-only dispatch now peeks the first audio packet (without consuming it), reads the block size from
+  its frame header, and sends such a stream to the FFmpeg host, which reads the size from every frame;
+  the dispatch log line names both sizes. Frames larger than the declared maximum break the
+  specification and libavcodec refuses them as well, so they keep their route. Covered by
+  `Issue946FLACFrameBlockSizeTests`.
+
 - **`preferredDecodePath = .software` now reaches an audio-only session.** The audio-only dispatch
   read only the codec whitelist, the custom-source flag and the FLAC block floor (AE#764), so the
   preference was silently dropped and every whitelisted codec still went to `AudioAVPlayerHost`. A

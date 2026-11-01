@@ -664,17 +664,37 @@ extension AetherEngine {
 
     /// Whether an audio-only session goes to AVPlayer (`AudioAVPlayerHost`) rather than libavcodec
     /// (`AudioPlaybackHost`). AVPlayer needs a URL it can read and a codec on the whitelist, and
-    /// takes neither a FLAC whose blocks are under CoreMedia's floor (AE#764) nor a session the host
-    /// asked onto `.software`. That last one was ignored here before: `preferredDecodePath` only
-    /// reached the video routing, so a host that had watched AVPlayer mistime a stream (hi-res FLAC
-    /// over HTTP whose clock ran past the track's length) had no way onto the FFmpeg host.
+    /// takes neither a FLAC whose blocks are under CoreMedia's floor (AE#764), nor a FLAC whose frames
+    /// are smaller than `STREAMINFO`'s `max_blocksize` (AE#946, AVPlayer mistimes it), nor
+    /// a session the host asked onto `.software`.
     nonisolated static func audioOnlyUsesAVPlayer(
         codecID: AVCodecID,
         isCustomSource: Bool,
         flacBlocksTooSmall: Bool,
+        flacFramesMistimed: Bool,
         preferred: DecodePath
     ) -> Bool {
-        !isCustomSource && avPlayerCanDecodeAudio(codecID) && !flacBlocksTooSmall && preferred != .software
+        !isCustomSource && avPlayerCanDecodeAudio(codecID) && !flacBlocksTooSmall && !flacFramesMistimed
+            && preferred != .software
+    }
+
+    /// AE#946: how many packets the audio-only dispatch looks through for the first FLAC frame. An
+    /// attached cover picture is delivered as a packet ahead of the audio.
+    static let flacFramePeekPacketBudget = 8
+
+    /// AE#946: the block size of `streamIndex`'s first FLAC frame, peeked without consuming it (the FFmpeg
+    /// host reuses this demuxer and reads the same packets). nil when no fixed-blocksize frame turned up.
+    static func firstFLACFrameBlockSize(demuxer: Demuxer, streamIndex: Int32) -> UInt16? {
+        var blockSize: UInt16?
+        try? demuxer.peekPackets(maxPackets: flacFramePeekPacketBudget) { packet in
+            guard packet.pointee.stream_index == streamIndex else { return false }
+            if let data = packet.pointee.data, packet.pointee.size > 0 {
+                blockSize = FLACStreamInfo.fixedStrategyFrameBlockSize(
+                    UnsafeBufferPointer(start: data, count: Int(packet.pointee.size)))
+            }
+            return true
+        }
+        return blockSize
     }
 
     // MARK: - Audio track selection (#72)
