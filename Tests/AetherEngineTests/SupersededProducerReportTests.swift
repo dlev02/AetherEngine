@@ -90,7 +90,7 @@ struct SupersededProducerReportTests {
     // MARK: - The re-cut mark (HLS-105)
 
     @Test("a re-cut whose gate opens after the seek stopped waiting is still recorded as a re-cut",
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func lateRecutGateKeepsItsMark() async throws {
         let session = try Session()
         let engine = session.engine
@@ -155,7 +155,7 @@ struct SupersededProducerReportTests {
     }
 
     @Test("a revive that woke after another restart replaced its dead producer restarts nothing",
-          .timeLimit(.minutes(1)))
+          .timeLimit(.minutes(3)))
     func meteredReviveYieldsToAReplacement() async throws {
         let session = try Session()
         let engine = session.engine

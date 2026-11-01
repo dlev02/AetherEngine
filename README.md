@@ -661,7 +661,9 @@ Pin to `.upToNextMinor(from: "7.53.1")` for stricter teams that prefer to opt in
 | Xcode | 27.0 |
 
 The Swift and Xcode rows are the supported toolchain CI builds and tests with (GitHub's
-`xcode-27` image). Older toolchains are not supported; the deployment floor above
+`xcode-27` image): every change runs the tests on macOS and builds the test target for the iOS and
+tvOS Simulator, and a nightly job (`ci-extended.yml`, also run before each release) builds Release,
+visionOS and the device SDKs with every optional component. Older toolchains are not supported; the deployment floor above
 stays iOS / tvOS 18 and macOS 15, with newer calls behind `#available`. A weekly best-effort job
 (`xcode26-compat.yml`, also run before each release) builds the package for tvOS and iOS with
 Xcode 26.3 (Swift 6.2), so a break there is known before a release ships, but it does not block one.
