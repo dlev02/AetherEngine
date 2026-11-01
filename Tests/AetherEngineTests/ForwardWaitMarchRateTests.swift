@@ -8,6 +8,7 @@ import Foundation
 /// 23.6 s while a restart at the target resumed in 4.3 to 4.9 s on the same session (Apple TV 4K,
 /// 74 Mbps link, 71.5 Mbps remux, ~4.1 s segments). The provider now waits only while the measured
 /// march reaches the target sooner than a restart would.
+@Suite(.offCooperativePool)
 struct ForwardWaitMarchRateTests {
 
     private final class Recorder: @unchecked Sendable {
