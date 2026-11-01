@@ -53,10 +53,11 @@ final class Issue732PersistentHTTP1Tests: XCTestCase {
         let reader = try XCTUnwrap(made)
         defer { reader.close() }
 
-        let headCount = await Self.offPool { Self.readPacket(reader) }
+        // Into segment 2's body, so the seek lands mid-body rather than before its response head.
+        let lead = await Self.offPool { Self.readBytes(reader, count: 7 * 188) }
 
-        XCTAssertEqual(headCount, 188)
-        try await waitUntil { server.requests.contains { $0.path == "/seg2.ts" } }
+        XCTAssertEqual(lead.count, 7 * 188)
+        XCTAssertEqual(lead[6 * 188 + Self.markerOffset], 2, "the seventh packet is segment 2's first")
 
         let sought = await Self.offPool { reader.seek(to: 26) }
 
@@ -225,10 +226,12 @@ final class Issue732PersistentHTTP1Tests: XCTestCase {
         let reader = try XCTUnwrap(made)
         defer { reader.close() }
 
-        let headCount = await Self.offPool { Self.readPacket(reader) }
+        // Read into segment 1, not just until the server saw its request: a seek that lands before the
+        // client has the response head closes the connection at once instead of draining it (CI: 0.002 s).
+        let lead = await Self.offPool { Self.readBytes(reader, count: 4 * 188) }
 
-        XCTAssertEqual(headCount, 188)
-        try await waitUntil { server.requests.contains { $0.path == "/seg1.ts" } }
+        XCTAssertEqual(lead.count, 4 * 188)
+        XCTAssertEqual(lead[3 * 188 + Self.markerOffset], 1, "the fourth packet is segment 1's first")
         let seekStarted = Date()
         let sought = await Self.offPool { reader.seek(to: 20) }
         XCTAssertTrue(sought)
@@ -572,6 +575,18 @@ final class Issue732PersistentHTTP1Tests: XCTestCase {
     private static func readPacket(_ reader: HLSVODIngestReader) -> Int32 {
         var head = [UInt8](repeating: 0, count: 188)
         return head.withUnsafeMutableBufferPointer { reader.read($0.baseAddress, size: 188) }
+    }
+
+    private static func readBytes(_ reader: HLSVODIngestReader, count: Int) -> [UInt8] {
+        var out: [UInt8] = []
+        var buffer = [UInt8](repeating: 0, count: 188)
+        while out.count < count {
+            let want = Int32(min(buffer.count, count - out.count))
+            let got = buffer.withUnsafeMutableBufferPointer { reader.read($0.baseAddress, size: want) }
+            if got <= 0 { return out }
+            out += buffer[0..<Int(got)]
+        }
+        return out
     }
 
     private static func drain(_ reader: HLSVODIngestReader) -> [UInt8] {
