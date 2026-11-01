@@ -12,6 +12,16 @@ the public-API contract.
 
 ### Fixed
 
+- **An SDR start that changes the panel's refresh rate waits for the switch to end before playing**
+  (#950). The #449 exit released the play gate as soon as the display link read the requested rate, and a
+  display link reads the new cadence once the compositor runs at it, long before the HDMI sink has
+  re-locked: on an LG C2, a 23.976 start from the 50 Hz home screen released 50 to 135 ms after the switch
+  started, tvOS reported such switches ending after ~2.5 s, and three of six starts flashed pink noise over
+  the black. The engine now reads the panel's cadence across the probe, before it writes the criteria.
+  When the panel was already at the rate (the #449 case, a start that never sees an end) the exit stays;
+  when it had to switch, the gate waits for the end notification, the in-progress flag or the 6 s cap, as
+  an HDR start does. `SET:` names the pre-write reading, and a gate that declines the reading says so.
+
 - **A persistent HTTP/1.1 request no longer fails its response-head deadline on the client's own
   scheduling delay** (#732 follow-up). The 45 s head deadline was checked before each read, so a task
   that got its thread back only after the deadline threw `headDeadlineExceeded` without looking at the

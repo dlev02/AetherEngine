@@ -4413,6 +4413,10 @@ public final class AetherEngine: ObservableObject {
         var options = options
         options = Self.applyingSharedOutputRole(options)
         SharedOutputCoordinator.shared.join(ObjectIdentifier(self), role: options.sharedOutputRole, tag: logTag, owner: self)
+        // AE#950: the panel's cadence before the criteria write, so the play gate can tell a rate the panel
+        // already ran from one it had to switch to. Runs across the probe, `apply()` reads and stops it.
+        if options.engineWritesDisplayCriteria { displayCriteria.beginPreWriteCadence() }
+        defer { displayCriteria.endPreWriteCadence() }
         // #436: a speed the host set belongs to the item it was set on. The rebuilds a session makes
         // on its own (reload at position, audio-track switch, AirPlay LAN swap, background return)
         // reopen the same source and keep it; a different item starts at 1.0, so a host whose speed
