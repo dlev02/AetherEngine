@@ -119,8 +119,11 @@ struct LiveRecoveryPlaylistGrowthTests {
         #expect(engine.cache === cache)
         #expect(engine.provider === provider)
         // The new broadcast is finite and every later reopen repeats it, so a slow runner can see the
-        // source exhausted a second time and halted again by now. Only that may halt it.
-        #expect(!provider.liveProductionHalted || observed.sourceResets > resetsBeforeRetry)
+        // source exhausted a second time and halted again by now. Only that may halt it, and the halt
+        // lands before the exhaustion callback, so a halted provider waits for the callback.
+        if provider.liveProductionHalted {
+            try await waitFor { observed.sourceResets > resetsBeforeRetry }
+        }
     }
 
     @Test("a producer rebuilt in place reports into the same playlist", .timeLimit(.minutes(3)))
