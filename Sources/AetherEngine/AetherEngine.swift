@@ -704,6 +704,9 @@ public final class AetherEngine: ObservableObject {
     /// #846: set when the session's stage disabled itself, so no later host of the session builds one again.
     var sourceUpscaleDisabled: UpscaleStatus? = nil
 
+    /// #846: the source frame rate the upscale decision read, which the failure memory is keyed with.
+    var sourceUpscaleFrameRate: Double? = nil
+
     /// #846: the routing would have played this session natively, and only the upscale route took it to software.
     var sourceSoftwareOnlyForUpscale = false
 
@@ -4626,6 +4629,7 @@ public final class AetherEngine: ObservableObject {
         sourceUpscalePlan = nil
         sourceUpscaleDisabled = nil
         sourceSoftwareOnlyForUpscale = false
+        sourceUpscaleFrameRate = nil
         sourceDVBLCompatID = nil
         sourceDolbyVisionBaseLayerPresentable = false
         sourceDolbyVisionRPUProfile = nil
@@ -7158,6 +7162,7 @@ public final class AetherEngine: ObservableObject {
         sourceUpscalePlan = nil
         sourceUpscaleDisabled = nil
         sourceSoftwareOnlyForUpscale = false
+        sourceUpscaleFrameRate = nil
         sourceDVBLCompatID = nil
         sourceDolbyVisionBaseLayerPresentable = false
         sourceDolbyVisionRPUProfile = nil

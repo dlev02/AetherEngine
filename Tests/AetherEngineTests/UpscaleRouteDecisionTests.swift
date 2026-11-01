@@ -159,16 +159,34 @@ struct UpscaleRouteDecisionTests {
         #expect(decide(source: geo(720, 480), failedEarlier: { $0 == plan }).plan != nil)
     }
 
-    @Test func failureMemoryRemembersPlans() throws {
+    @Test func failureMemoryRemembersPlansAtTheirRate() throws {
         UpscaleFailureMemory.reset()
         defer { UpscaleFailureMemory.reset() }
         let plan = try #require(decide().plan)
         let other = try #require(decide(source: geo(720, 480)).plan)
-        #expect(!UpscaleFailureMemory.contains(plan))
-        UpscaleFailureMemory.record(plan)
-        #expect(UpscaleFailureMemory.contains(plan))
-        #expect(!UpscaleFailureMemory.contains(other))
-        #expect(decide(failedEarlier: UpscaleFailureMemory.contains) == .notTaken(.stageFailedEarlier))
+        #expect(!UpscaleFailureMemory.contains(plan, frameRate: 50))
+        UpscaleFailureMemory.record(plan, frameRate: 50)
+        #expect(UpscaleFailureMemory.contains(plan, frameRate: 50))
+        #expect(UpscaleFailureMemory.contains(plan, frameRate: 59.94))
+        #expect(UpscaleFailureMemory.contains(plan, frameRate: nil))
+        #expect(!UpscaleFailureMemory.contains(plan, frameRate: 25))
+        #expect(!UpscaleFailureMemory.contains(other, frameRate: 50))
+        UpscaleFailureMemory.record(plan, frameRate: 24)
+        #expect(UpscaleFailureMemory.contains(plan, frameRate: 23.976))
+        #expect(decide(failedEarlier: { UpscaleFailureMemory.contains($0, frameRate: 25) })
+                == .notTaken(.stageFailedEarlier))
+    }
+
+    /// The owed return is dropped once the session moved on, and waits while nothing plays.
+    @Test @MainActor func owedNativeReturnClearsOnANewGenerationAndWaitsOtherwise() throws {
+        let engine = try AetherEngine()
+        engine.upscaleNativeReturnOwed = engine.loadGeneration &+ 1
+        engine.settleOwedUpscaleNativeReturn()
+        #expect(engine.upscaleNativeReturnOwed == nil)
+        engine.upscaleNativeReturnOwed = engine.loadGeneration
+        engine.settleOwedUpscaleNativeReturn()
+        #expect(engine.state == .idle)
+        #expect(engine.upscaleNativeReturnOwed == engine.loadGeneration)
     }
 
     @Test func disabledStageReturnsOnlyAURLVODSessionItAloneMovedToNative() {

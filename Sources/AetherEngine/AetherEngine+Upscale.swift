@@ -18,6 +18,7 @@ extension AetherEngine {
         guard options.upscalesLowResolutionVideo else { return .notTaken(.preferenceOff) }
 
         var source = SourceGeometry(width: 0, height: 0, sarNum: 0, sarDen: 0)
+        var frameRate: Double?
         var isSDR = true
         var isEightBit420 = true
         if let stream = videoStream, let cp = stream.pointee.codecpar {
@@ -26,6 +27,7 @@ extension AetherEngine {
                 width: cp.pointee.width, height: cp.pointee.height)
             source = SourceGeometry(width: Int(cp.pointee.width), height: Int(cp.pointee.height),
                                     sarNum: Int(sar?.num ?? 0), sarDen: Int(sar?.den ?? 0))
+            frameRate = Self.detectFrameRate(stream: stream)
             isSDR = UpscaleRouteDecision.isSDR(colorTransfer: cp.pointee.color_trc)
             isEightBit420 = UpscaleRouteDecision.isEightBit420(
                 pixelFormat: cp.pointee.format, bitsPerRawSample: cp.pointee.bits_per_raw_sample)
@@ -46,12 +48,14 @@ extension AetherEngine {
             #endif
         }
 
+        sourceUpscaleFrameRate = frameRate
         return UpscaleRouteDecision.decide(
             preference: true, osSupportsStage: osSupportsStage, metalFXSupported: metalFXSupported,
             source: source, isSDR: isSDR, isDolbyVision: dvProfile != nil, isEightBit420: isEightBit420,
             display: DisplayPixelSize.current() ?? .zero,
             wirelessAirPlayRoute: wirelessAirPlayRoute, demuxedAudioLive: demuxedAudioLive,
-            mlScaleFactors: mlScaleFactors, stageFailedEarlier: UpscaleFailureMemory.contains)
+            mlScaleFactors: mlScaleFactors,
+            stageFailedEarlier: { UpscaleFailureMemory.contains($0, frameRate: frameRate) })
     }
 
     /// Connects the stage `host`'s load built to `activeUpscale`. The host's load can already have run it
@@ -90,7 +94,7 @@ extension AetherEngine {
         let status = UpscaleStatus.afterDisable(reason: reason, current: activeUpscale, plan: plan)
         activeUpscale = status
         sourceUpscaleDisabled = status
-        UpscaleFailureMemory.record(plan)
+        UpscaleFailureMemory.record(plan, frameRate: sourceUpscaleFrameRate)
         guard Self.upscaleDisableReturnsToNative(
             softwareOnlyForUpscale: sourceSoftwareOnlyForUpscale, isCustomSource: isCustomSource,
             isLive: loadedOptions.isLive)

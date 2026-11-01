@@ -193,18 +193,30 @@ extension UpscaleRouteDecision.Reason {
 }
 
 /// The plans whose stage disabled itself, remembered for the process so a reload or a later title with the
-/// same geometry stays on the route it would have taken without the stage.
+/// same geometry stays on the route it would have taken without the stage. Keyed with the frame rate, like
+/// `MetalFXCostMemory`: a stage that gave up at one rate blocks the same plan at that rate or faster, not
+/// a slower title it might have kept up with. An unknown rate on either side counts as a match.
 enum UpscaleFailureMemory {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var failed: Set<UpscalePlan> = []
-
-    static func record(_ plan: UpscalePlan) {
-        lock.lock(); failed.insert(plan); lock.unlock()
+    private struct Entry: Hashable {
+        let plan: UpscalePlan
+        let frameRate: Double?
     }
 
-    static func contains(_ plan: UpscalePlan) -> Bool {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var failed: Set<Entry> = []
+
+    static func record(_ plan: UpscalePlan, frameRate: Double?) {
+        lock.lock(); failed.insert(Entry(plan: plan, frameRate: frameRate)); lock.unlock()
+    }
+
+    /// 1% slack, so 23.976 counts as at least as fast as 24.
+    static func contains(_ plan: UpscalePlan, frameRate: Double?) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        return failed.contains(plan)
+        return failed.contains { entry in
+            guard entry.plan == plan else { return false }
+            guard let failedAt = entry.frameRate, let frameRate else { return true }
+            return frameRate >= failedAt * 0.99
+        }
     }
 
     static func reset() {
